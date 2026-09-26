@@ -355,12 +355,9 @@ export default function AdminLayout({
                                             {has(MENU.SALES_HISTORY) && (
                                                 <NavItem href="/sales/history" icon={History} label="Sales History" active={isActive("/sales/history")} />
                                             )}
-                                            {/* {has(MENU.TABLE_ORDERS) && (
-                                                <NavItem href="/table-orders" icon={TableProperties} label="Table Orders" active={isActive("/table-orders")} />
-                                            )}
                                             {has(MENU.SHOP_ORDERS) && (
                                                 <NavItem href="/shop/orders" icon={ShoppingBag} label="Shop Orders" active={isActive("/shop/orders")} />
-                                            )} */}
+                                            )}
                                             {has(MENU.PROMOS) && (
                                                 <NavItem href="/promos" icon={Tag} label="Promos & Discounts" active={isActive("/promos")} />
                                             )}

@@ -242,12 +242,13 @@ class SystemSettingsController extends Controller
         $changed    = [];
 
         foreach ($allIds as $id) {
-            $key       = "modules.menu_{$id}";
-            $isEnabled = in_array((string) $id, array_map('strval', $enabled));
-            $current   = SystemSetting::get($key, null, 'true');
-            $new       = $isEnabled ? 'true' : 'false';
+            $idStr     = (string) $id;
+            $key       = "modules.menu_{$idStr}";
+            $isEnabled = in_array($idStr, array_map('strval', $enabled));
+            $isCurrentlyEnabled = SystemSetting::isModuleEnabled($idStr);
 
-            if ((string) $current !== $new) {
+            if ($isCurrentlyEnabled !== $isEnabled) {
+                $new = $isEnabled ? 'true' : 'false';
                 SystemSetting::updateOrCreate(
                     ['key' => $key, 'branch_id' => null],
                     [
@@ -257,7 +258,7 @@ class SystemSettingsController extends Controller
                         'label'  => $menuLabels[$id] ?? $key,
                     ]
                 );
-                $changed[$id] = $new;
+                $changed[$idStr] = $new;
             }
         }
 
@@ -319,22 +320,14 @@ class SystemSettingsController extends Controller
     }
 
     // ── Helper: read which menus are enabled ──────────────────────────────────
-
     private function getModuleSettings(): array
     {
         $menuLabels = MenuHelper::all();
         $result     = [];
 
         foreach ($menuLabels as $id => $label) {
-            $key = "modules.menu_{$id}";
-
-            // Repair any existing rows that were saved without group/type/label
-            SystemSetting::where('key', $key)
-                ->whereNull('branch_id')
-                ->where(fn ($q) => $q->whereNull('group')->orWhereNull('type'))
-                ->update(['group' => 'modules', 'type' => 'boolean', 'label' => $label]);
-
-            $result[$id] = SystemSetting::get($key, null, 'true') !== 'false';
+            $idStr = (string) $id;
+            $result[$idStr] = SystemSetting::isModuleEnabled($idStr);
         }
 
         return $result;

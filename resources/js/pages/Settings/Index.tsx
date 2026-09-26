@@ -509,12 +509,16 @@ export default function SettingsIndex() {
 
         router.post(routes.settings.save(), payload, {
             preserveScroll: true,
-            onSuccess: () => {
+            onSuccess: (page) => {
                 setSaving(false);
                 setDirty({});
                 setModulesDirty(false);
                 setSavingModules(false);
                 setActivePreset(null);
+                const fresh = (page.props as any)?.module_settings;
+                if (fresh) {
+                    setModules(fresh);
+                }
             },
             onError: () => {
                 setSaving(false);

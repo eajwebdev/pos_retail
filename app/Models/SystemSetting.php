@@ -136,7 +136,11 @@ class SystemSetting extends Model
         }
 
         $val = $all[$key]['value'] ?? 'true';
-        return $val !== 'false' && $val !== false && $val !== '0' && $val !== 0;
+        if ($val === false || $val === 'false' || $val === '0' || $val === 0 || $val === '') {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -156,7 +160,7 @@ class SystemSetting extends Model
             }
             $key = "modules.menu_{$idStr}";
             $val = isset($all[$key]) ? ($all[$key]['value'] ?? 'true') : 'true';
-            if ($val !== 'false' && $val !== false && $val !== '0' && $val !== 0) {
+            if ($val !== 'false' && $val !== false && $val !== '0' && $val !== 0 && $val !== '') {
                 $enabled[] = $idStr;
             }
         }
@@ -172,9 +176,13 @@ class SystemSetting extends Model
      */
     public static function set(string $key, mixed $value, ?int $branchId = null): static
     {
-        $stringValue = is_array($value) || is_object($value)
-            ? json_encode($value)
-            : (string) $value;
+        if (is_bool($value)) {
+            $stringValue = $value ? 'true' : 'false';
+        } else {
+            $stringValue = is_array($value) || is_object($value)
+                ? json_encode($value)
+                : (string) $value;
+        }
 
         return static::updateOrCreate(
             ['key' => $key, 'branch_id' => $branchId],
