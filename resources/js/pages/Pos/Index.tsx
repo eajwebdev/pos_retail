@@ -606,6 +606,131 @@ function SaleSuccessModal({ receipt, currency, onNewSale }: {
     );
 }
 
+// ─── VoidCartModal ────────────────────────────────────────────────────────────
+function VoidCartModal({ cart, subtotal, itemCount, currency, onConfirm, onClose }: {
+    cart: CartItem[];
+    subtotal: number;
+    itemCount: number;
+    currency: string;
+    onConfirm: () => void;
+    onClose: () => void;
+}) {
+    // Keyboard listener: Escape to cancel, Enter to confirm void
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+            } else if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                onConfirm();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown, { capture: true });
+        return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+    }, [onClose, onConfirm]);
+
+    const uniqueCount = cart.length;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0 bg-muted/20">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive shrink-0">
+                            <Trash2 className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-foreground text-base tracking-tight">Void Active Transaction</h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">Clear all items in current register sale</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                        title="Cancel (Esc)"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+
+                {/* Body Content */}
+                <div className="p-5 space-y-4">
+                    {/* Cart Summary Card */}
+                    <div className="bg-muted/40 border border-border rounded-xl p-3.5 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Items</span>
+                            <span className="text-xs font-bold text-foreground bg-background px-2 py-0.5 rounded-md border border-border">
+                                {uniqueCount} item{uniqueCount > 1 ? "s" : ""} ({itemCount} pcs)
+                            </span>
+                        </div>
+
+                        {/* Item preview list */}
+                        <div className="max-h-36 overflow-y-auto divide-y divide-border/50 rounded-lg bg-background/50 border border-border/60 px-3">
+                            {cart.map(item => (
+                                <div key={item.key} className="flex items-center justify-between py-2 text-xs">
+                                    <div className="min-w-0 flex-1 pr-3">
+                                        <p className="font-semibold text-foreground truncate">{item.name}</p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            {item.qty} {item.unit} × {fmtMoney(item.price, currency)}
+                                            {item.variant_name ? ` · ${item.variant_name}` : ""}
+                                        </p>
+                                    </div>
+                                    <span className="font-mono font-bold text-foreground shrink-0">
+                                        {fmtMoney(item.price * item.qty, currency)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Total Due Row */}
+                        <div className="flex items-center justify-between pt-1 border-t border-border/80">
+                            <span className="text-xs font-bold text-foreground">Transaction Total</span>
+                            <span className="text-base font-black font-mono text-destructive">
+                                {fmtMoney(subtotal, currency)}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Warning Callout */}
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs leading-relaxed">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                            <span className="font-bold">Are you sure?</span> This will clear all scanned products from the register and reset the active cart. This action cannot be undone.
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex items-center gap-3 px-5 py-3.5 border-t border-border shrink-0 bg-muted/10">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 h-10 font-semibold text-xs gap-1.5 cursor-pointer"
+                        onClick={onClose}
+                    >
+                        <span>Keep Transaction</span>
+                        <kbd className="hidden sm:inline text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded border border-border">Esc</kbd>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        className="flex-1 h-10 font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+                        onClick={onConfirm}
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Yes, Void Transaction</span>
+                        <kbd className="hidden sm:inline text-[10px] text-destructive-foreground/80 font-mono bg-destructive-foreground/20 px-1.5 py-0.5 rounded">Enter</kbd>
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── SimSoft Cashier Table View (Fast Cashiering Mode) ────────────────────────
 function SimSoftCashierTable({
     cart, currency, onUpdateQty, onSetExactQty, onOpenCalc, onRemove, onClear, onCharge, onCustomerCredit,
@@ -987,6 +1112,7 @@ export default function PosIndex() {
     const [variantFor,         setVariantFor]         = useState<Product | null>(null);
     const [lastScanned,        setLastScanned]        = useState<{ name: string; qty: number; unit: string; price: number; total: number; targetAmount?: number } | null>(null);
     const [calcItem,           setCalcItem]           = useState<CartItem | null>(null);
+    const [showVoidConfirm,    setShowVoidConfirm]    = useState(false);
 
     const visualLayout = layout === "grocery" ? "grid" : layout;
     const searchRef = useRef<HTMLInputElement>(null);
@@ -1230,11 +1356,15 @@ export default function PosIndex() {
 
     const removeItem = (key: string) => setCart(prev => prev.filter(i => i.key !== key));
     const clearCart  = () => {
-        if (cart.length > 0 && window.confirm("Are you sure you want to void / clear this active transaction?")) {
-            setCart([]);
-            setLastScanned(null);
-            refocus();
-        }
+        if (cart.length === 0) return;
+        setShowVoidConfirm(true);
+    };
+
+    const confirmVoidCart = () => {
+        setCart([]);
+        setLastScanned(null);
+        setShowVoidConfirm(false);
+        refocus();
     };
 
     // Checkout Confirmation
@@ -1405,6 +1535,7 @@ export default function PosIndex() {
                 }
             } else if (e.key === "Escape") {
                 setShowPayment(false);
+                setShowVoidConfirm(false);
                 setVariantFor(null);
                 setCalcItem(null);
                 setSearch("");
@@ -1713,6 +1844,7 @@ export default function PosIndex() {
                             type="button"
                             onClick={() => {
                                 setShowPayment(false);
+                                setShowVoidConfirm(false);
                                 setVariantFor(null);
                                 setCalcItem(null);
                                 setSearch("");
@@ -1759,6 +1891,20 @@ export default function PosIndex() {
                     onConfirm={handleConfirm}
                     onClose={() => { setShowPayment(false); setError(null); refocus(50); }}
                     loading={loading} serverError={error} initialMethod={paymentMethodPreset} />
+            )}
+
+            {showVoidConfirm && (
+                <VoidCartModal
+                    cart={cart}
+                    subtotal={subtotal}
+                    itemCount={itemCount}
+                    currency={currency}
+                    onConfirm={confirmVoidCart}
+                    onClose={() => {
+                        setShowVoidConfirm(false);
+                        refocus(50);
+                    }}
+                />
             )}
 
             {receipt && <SaleSuccessModal receipt={receipt} currency={currency} onNewSale={() => { setReceipt(null); refocus(100); }} />}
