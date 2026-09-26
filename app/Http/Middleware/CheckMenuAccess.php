@@ -18,15 +18,24 @@ class CheckMenuAccess
             return redirect()->route('login');
         }
 
-        if (!$user->hasAccess($menuId)) {
-            $home = $user->isCashier() ? route('pos.index') : route('dashboard');
+        // Check if module is disabled system-wide (menu 28 System Settings is always accessible for admins)
+        if ($menuId !== '28' && !\App\Models\SystemSetting::isModuleEnabled($menuId)) {
+            $target = $user->hasAccess('1') ? route('dashboard') : ($user->hasAccess('2') ? route('pos.index') : route('settings.index'));
+            if ($request->url() === $target || $request->fullUrl() === $target) {
+                abort(403, 'This module is disabled in system settings.');
+            }
+            return redirect()->to($target)->with('error', 'This module is disabled in system settings.');
+        }
 
-            // Guard against infinite redirect loop if current URL is the target home URL
-            if ($request->url() === $home || $request->fullUrl() === $home) {
+        if (!$user->hasAccess($menuId)) {
+            $target = $user->hasAccess('1') ? route('dashboard') : ($user->hasAccess('2') ? route('pos.index') : route('settings.index'));
+
+            // Guard against infinite redirect loop if current URL is the target URL
+            if ($request->url() === $target || $request->fullUrl() === $target) {
                 abort(403, 'You do not have permission to access this page.');
             }
 
-            return redirect()->to($home)->with('error', 'You do not have access to that page.');
+            return redirect()->to($target)->with('error', 'You do not have access to that page.');
         }
 
         return $next($request);

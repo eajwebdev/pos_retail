@@ -136,37 +136,51 @@ class User extends Authenticatable
 
     public function getAccessibleMenuIds(): array
     {
+        $enabledModuleIds = SystemSetting::enabledMenuIds();
+
         if ($this->isSuperAdmin() || $this->isAdministrator()) {
-            return array_values(array_map('strval', array_keys(MenuHelper::all())));
+            return $enabledModuleIds;
         }
 
         if ($this->isCashier()) {
-            $defaultCashierIds = ['2', '3', '14', '15', '16', '39'];
-            if (!empty($this->access)) {
-                return array_values(array_unique(array_merge($defaultCashierIds, array_map('strval', $this->access))));
-            }
-            return $defaultCashierIds;
+            $baseAccess = !empty($this->access) ? array_map('strval', $this->access) : ['2', '3', '14', '15', '16', '39'];
+            return array_values(array_intersect($baseAccess, $enabledModuleIds));
         }
 
         if ($this->isManager()) {
             if (!empty($this->access)) {
-                return array_values(array_map('strval', $this->access));
+                $baseAccess = array_map('strval', $this->access);
+            } else {
+                // Manager default: all menus except user management, branches, system settings
+                $excluded = ['23', '25', '28'];
+                $baseAccess = array_diff(array_keys(MenuHelper::all()), $excluded);
             }
-            // Manager default: all menus except user management, branches, system settings
-            $excluded = ['23', '25', '28'];
-            return array_values(array_map('strval', array_diff(array_keys(MenuHelper::all()), $excluded)));
+            return array_values(array_intersect(array_map('strval', $baseAccess), $enabledModuleIds));
         }
 
-        return array_values(array_map('strval', $this->access ?? []));
+        $baseAccess = array_map('strval', $this->access ?? []);
+        return array_values(array_intersect($baseAccess, $enabledModuleIds));
     }
 
     public function hasAccess(string|int $menuId): bool
     {
+        $menuIdStr = (string) $menuId;
+
+        // System Settings (28) is always accessible to super admins and administrators
+        if ($menuIdStr === '28' && ($this->isSuperAdmin() || $this->isAdministrator())) {
+            return true;
+        }
+
+        // If module is disabled system-wide, nobody has access
+        if (!SystemSetting::isModuleEnabled($menuIdStr)) {
+            return false;
+        }
+
         if ($this->isSuperAdmin() || $this->isAdministrator()) {
             return true;
         }
 
-        return in_array((string) $menuId, $this->getAccessibleMenuIds(), true);
+        return in_array($menuIdStr, $this->getAccessibleMenuIds(), true);
     }
 
     public function getAccessibleMenus(): array

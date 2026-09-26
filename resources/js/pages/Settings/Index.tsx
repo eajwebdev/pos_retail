@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Head, usePage, router } from "@inertiajs/react";
 import AdminLayout from "@/layouts/AdminLayout";
 import { routes } from "@/routes";
@@ -427,6 +427,19 @@ export default function SettingsIndex() {
     const [toast,          setToast]           = useState(flash?.message ?? null);
     const [activePreset,   setActivePreset]    = useState<string | null>(null);
 
+    // Sync modules state when props change
+    useEffect(() => {
+        setModules(module_settings ?? {});
+        setModulesDirty(false);
+    }, [module_settings]);
+
+    // Sync flash toast when new flash messages arrive
+    useEffect(() => {
+        if (flash?.message) {
+            setToast(flash.message);
+        }
+    }, [flash]);
+
     // Color theme — read from settings, queue changes through dirty like any other setting
     const currentTheme = dirty["general.color_theme"]
         ?? settings["general"]?.["general.color_theme"]?.value
@@ -474,27 +487,44 @@ export default function SettingsIndex() {
         });
     };
 
+    const handleDiscard = () => {
+        setDirty({});
+        setModules(module_settings ?? {});
+        setModulesDirty(false);
+        setActivePreset(null);
+    };
+
     const handleSave = () => {
-        if (Object.keys(dirty).length === 0) return;
+        if (Object.keys(dirty).length === 0 && !modulesDirty) return;
         setSaving(true);
-        router.post(routes.settings.save(), {
+        if (modulesDirty) setSavingModules(true);
+        const payload: Record<string, any> = {
             settings:  dirty,
             branch_id: selectedBranch ?? undefined,
-        }, {
+        };
+        if (modulesDirty) {
+            const allMenuIds = Object.values(menu_groups).flatMap(g => Object.keys(g));
+            payload.enabled_menus = allMenuIds.filter(id => modules[id] !== false);
+        }
+
+        router.post(routes.settings.save(), payload, {
             preserveScroll: true,
-            onSuccess: () => { setSaving(false); setDirty({}); },
-            onError:   () => setSaving(false),
+            onSuccess: () => {
+                setSaving(false);
+                setDirty({});
+                setModulesDirty(false);
+                setSavingModules(false);
+                setActivePreset(null);
+            },
+            onError: () => {
+                setSaving(false);
+                setSavingModules(false);
+            },
         });
     };
 
     const handleSaveModules = () => {
-        setSavingModules(true);
-        const enabledMenus = Object.entries(modules).filter(([, v]) => v).map(([id]) => id);
-        router.post(routes.settings.modules(), { enabled_menus: enabledMenus }, {
-            preserveScroll: true,
-            onSuccess: () => { setSavingModules(false); setModulesDirty(false); },
-            onError:   () => setSavingModules(false),
-        });
+        handleSave();
     };
 
     const effectiveValues = (groupSettings: Record<string, SettingDef>) => {
@@ -505,12 +535,14 @@ export default function SettingsIndex() {
         return result;
     };
 
-    const dirtyCount = Object.keys(dirty).length;
-    const groupKeys  = Object.keys(settings);
+    const settingsDirtyCount = Object.keys(dirty).length;
+    const totalDirtyCount    = settingsDirtyCount + (modulesDirty ? 1 : 0);
+    const groupKeys          = Object.keys(settings);
 
     // Admin can access global scope (null branch) for allowed groups.
     // Super admin can always access global scope.
-    const canAccessGlobal = is_super_admin || is_administrator;
+    const canAccessGlobal   = is_super_admin || is_administrator;
+    const canManageModules  = is_super_admin || is_administrator;
 
     return (
         <AdminLayout>
@@ -546,12 +578,12 @@ export default function SettingsIndex() {
                     </div>
 
                     {/* Save button */}
-                    {dirtyCount > 0 && (
+                    {totalDirtyCount > 0 && (
                         <Button className="gap-2 h-9 font-semibold shrink-0" onClick={handleSave} disabled={saving}>
                             {saving
                                 ? <span className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />
                                 : <Save className="h-4 w-4" />}
-                            Save {dirtyCount} change{dirtyCount > 1 ? "s" : ""}
+                            Save {totalDirtyCount} change{totalDirtyCount > 1 ? "s" : ""}
                         </Button>
                     )}
                 </div>
@@ -566,7 +598,7 @@ export default function SettingsIndex() {
                     <Shield className="h-3.5 w-3.5 shrink-0" />
                     {is_super_admin
                         ? "Super Admin — you can edit all settings, modules/feature flags, and branch overrides."
-                        : "Administrator — you can configure global settings (General, Inventory, Notifications, POS, Receipt, Tax) and branch-specific overrides. Modules and sensitive keys are Super Admin only."}
+                        : "Administrator — you can configure global settings (General, Inventory, Notifications, POS, Receipt, Tax), modules/feature flags, and branch-specific overrides."}
                 </div>
 
                 {/* Scope selector — Super Admin + Administrator */}
@@ -596,7 +628,7 @@ export default function SettingsIndex() {
                                 ? <>Editing branch overrides. Settings without an override use the global default. Use <RotateCcw className="inline h-3 w-3 mx-0.5" /> to reset a key back to global.</>
                                 : is_super_admin
                                     ? "Editing global defaults. These apply to all branches unless overridden."
-                                    : "Editing global defaults for General, Inventory, Notifications, POS, Receipt, and Tax. Modules are Super Admin only."}
+                                    : "Editing global defaults for General, Inventory, Notifications, POS, Receipt, Tax, and Modules."}
                         </p>
                     </div>
                 )}
@@ -606,8 +638,8 @@ export default function SettingsIndex() {
                     <ColorThemePicker currentTheme={currentTheme} onApply={handleThemeChange} />
                 )}
 
-                {/* ── Modules / Features (Super Admin only) ──────────────────── */}
-                {is_super_admin && Object.keys(menu_groups).length > 0 && (
+                {/* ── Modules / Features ──────────────────── */}
+                {canManageModules && Object.keys(menu_groups).length > 0 && (
                     <div className="bg-card border border-border rounded-2xl overflow-hidden">
                         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                             <div className="flex items-center gap-3">
@@ -707,13 +739,13 @@ export default function SettingsIndex() {
                     ))}
 
                 {/* Floating save bar */}
-                {dirtyCount > 0 && (
+                {totalDirtyCount > 0 && (
                     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
                         <div className="bg-card border border-border rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4">
                             <p className="text-sm text-muted-foreground">
-                                <span className="font-bold text-foreground">{dirtyCount}</span> unsaved change{dirtyCount > 1 ? "s" : ""}
+                                <span className="font-bold text-foreground">{totalDirtyCount}</span> unsaved change{totalDirtyCount > 1 ? "s" : ""}
                             </p>
-                            <Button size="sm" variant="outline" onClick={() => setDirty({})}>Discard</Button>
+                            <Button size="sm" variant="outline" onClick={handleDiscard}>Discard</Button>
                             <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={saving}>
                                 {saving
                                     ? <span className="h-3 w-3 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />

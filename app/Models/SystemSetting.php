@@ -120,6 +120,50 @@ class SystemSetting extends Model
             ->toArray();
     }
 
+    /**
+     * Check if a module/menu is enabled system-wide.
+     * Menu 28 (System Settings) is always enabled.
+     */
+    public static function isModuleEnabled(string|int $menuId): bool
+    {
+        $id = (string) $menuId;
+        if ($id === '28') return true;
+
+        $key = "modules.menu_{$id}";
+        $all = static::allForBranch(null);
+        if (!isset($all[$key])) {
+            return true;
+        }
+
+        $val = $all[$key]['value'] ?? 'true';
+        return $val !== 'false' && $val !== false && $val !== '0' && $val !== 0;
+    }
+
+    /**
+     * Return list of all enabled menu IDs system-wide.
+     */
+    public static function enabledMenuIds(): array
+    {
+        $all = static::allForBranch(null);
+        $enabled = [];
+        $allMenus = \App\Helpers\MenuHelper::all();
+
+        foreach ($allMenus as $id => $label) {
+            $idStr = (string) $id;
+            if ($idStr === '28') {
+                $enabled[] = $idStr;
+                continue;
+            }
+            $key = "modules.menu_{$idStr}";
+            $val = isset($all[$key]) ? ($all[$key]['value'] ?? 'true') : 'true';
+            if ($val !== 'false' && $val !== false && $val !== '0' && $val !== 0) {
+                $enabled[] = $idStr;
+            }
+        }
+
+        return array_values($enabled);
+    }
+
     // ── Core Write API ─────────────────────────────────────────────
 
     /**

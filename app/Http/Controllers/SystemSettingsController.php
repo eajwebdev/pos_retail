@@ -128,8 +128,8 @@ class SystemSettingsController extends Controller
             'active_branch_id'  => $branchId,
             'is_super_admin'    => $isSuper,
             'is_administrator'  => $user->isAdministrator(),
-            // Pass grouped menus so the UI can render feature flags (super admin only)
-            'menu_groups'       => $isSuper ? MenuHelper::grouped() : [],
+            // Pass grouped menus so the UI can render feature flags for super admin and administrator
+            'menu_groups'       => ($isSuper || $user->isAdministrator()) ? MenuHelper::grouped() : [],
         ]);
     }
 
@@ -137,22 +137,21 @@ class SystemSettingsController extends Controller
 
     public function save(Request $request): RedirectResponse
     {
-        $user     = auth()->user();
-        $branchId = $request->integer('branch_id') ?: null;
-        $isSuper  = $user->isSuperAdmin();
+        $user         = auth()->user();
+        $branchId     = $request->integer('branch_id') ?: null;
+        $isSuper      = $user->isSuperAdmin();
+        $values       = $request->input('settings', []);
+        $enabledMenus = $request->input('enabled_menus');
 
-        // Authorization:
-        // Super Admin    → can save global (null) or any branch
-        // Administrator  → can save global scope for ADMIN_GLOBAL_GROUPS, or any branch
-        //                  (modules group and super-admin-only keys are still blocked per-key below)
-        if (! $isSuper && ! $branchId) {
-            // Valid — admin saving global scope; key-level checks below enforce group restrictions
+        if ((empty($values) || ! is_array($values)) && $enabledMenus === null) {
+            return back()->with('message', ['type' => 'warning', 'text' => 'No settings were changed.']);
         }
 
-        $values = $request->input('settings', []);
-
-        if (empty($values) || ! is_array($values)) {
-            return back()->with('message', ['type' => 'warning', 'text' => 'No settings were changed.']);
+        // If enabled_menus was passed and user is super_admin or administrator, apply them
+        $modulesSaved = false;
+        if ($enabledMenus !== null && ($isSuper || $user->isAdministrator())) {
+            $this->applyModuleSettings(is_array($enabledMenus) ? $enabledMenus : [], $request->ip());
+            $modulesSaved = true;
         }
 
         $definitions = SystemSetting::whereNull('branch_id')
@@ -211,9 +210,13 @@ class SystemSettingsController extends Controller
             ]);
         }
 
+        $msg = $modulesSaved && $saved > 0
+            ? 'Settings and module access saved successfully.'
+            : ($modulesSaved ? 'Module access saved successfully.' : ($branchId ? 'Branch settings saved.' : 'Global settings saved.'));
+
         return back()->with('message', [
             'type' => 'success',
-            'text' => $branchId ? 'Branch settings saved.' : 'Global settings saved.',
+            'text' => $msg,
         ]);
     }
 
@@ -221,16 +224,23 @@ class SystemSettingsController extends Controller
 
     public function saveModules(Request $request): RedirectResponse
     {
-        // Only super admin can enable/disable modules
-        if (! auth()->user()->isSuperAdmin()) {
-            abort(403, 'Only Super Admin can manage module availability.');
+        $user = auth()->user();
+        if (! $user->isAdmin()) {
+            abort(403, 'Only administrators can manage module availability.');
         }
 
         $enabled = $request->input('enabled_menus', []);
-        $allIds  = array_keys(MenuHelper::all());
+        $this->applyModuleSettings(is_array($enabled) ? $enabled : [], $request->ip());
 
+        return back()->with('message', ['type' => 'success', 'text' => 'Module settings saved.']);
+    }
+
+    private function applyModuleSettings(array $enabled, ?string $ip): void
+    {
+        $allIds     = array_keys(MenuHelper::all());
         $menuLabels = MenuHelper::all();
         $changed    = [];
+
         foreach ($allIds as $id) {
             $key       = "modules.menu_{$id}";
             $isEnabled = in_array((string) $id, array_map('strval', $enabled));
@@ -238,7 +248,6 @@ class SystemSettingsController extends Controller
             $new       = $isEnabled ? 'true' : 'false';
 
             if ((string) $current !== $new) {
-                // Use updateOrCreate with full metadata so group/type/label are always set
                 SystemSetting::updateOrCreate(
                     ['key' => $key, 'branch_id' => null],
                     [
@@ -248,20 +257,21 @@ class SystemSettingsController extends Controller
                         'label'  => $menuLabels[$id] ?? $key,
                     ]
                 );
-                SystemSetting::flushCache(null);
                 $changed[$id] = $new;
             }
         }
 
-        ActivityLog::create([
-            'user_id'      => auth()->id(),
-            'action'       => 'modules_updated',
-            'subject_type' => SystemSetting::class,
-            'subject_id'   => 0,
-            'properties'   => ['changed' => $changed, 'ip' => $request->ip()],
-        ]);
+        SystemSetting::flushCache(null);
 
-        return back()->with('message', ['type' => 'success', 'text' => 'Module settings saved.']);
+        if (!empty($changed)) {
+            ActivityLog::create([
+                'user_id'      => auth()->id(),
+                'action'       => 'modules_updated',
+                'subject_type' => SystemSetting::class,
+                'subject_id'   => 0,
+                'properties'   => ['changed' => $changed, 'ip' => $ip],
+            ]);
+        }
     }
 
     // ── Reset branch key to global default ────────────────────────────────────
