@@ -67,17 +67,19 @@ class DailySummary extends Model
     }
 
     // ── Core: Generate (Fixed for null branch_id) ─────────────────────
-    public static function generate(?int $branchId = null, Carbon|string $date, bool $force = false): static
+    public static function generate(?int $branchId = null, Carbon|string|null $date = null, bool $force = false): static
     {
-        $date = Carbon::parse($date)->toDateString();
+        $date = $date ? Carbon::parse($date)->toDateString() : today()->toDateString();
 
-        // Find existing record (safe with null branch_id)
-        $existing = static::where('summary_date', $date)
-            ->when($branchId !== null, fn($q) => $q->where('branch_id', $branchId))
-            ->first();
+        // Find existing record if a specific branch is specified
+        if ($branchId !== null) {
+            $existing = static::where('summary_date', $date)
+                ->where('branch_id', $branchId)
+                ->first();
 
-        if ($existing?->is_finalized && !$force) {
-            return $existing;
+            if ($existing?->is_finalized && !$force) {
+                return $existing;
+            }
         }
 
         // Sales
@@ -126,19 +128,25 @@ class DailySummary extends Model
               ->when($branchId !== null, fn($q2) => $q2->where('branch_id', $branchId))
         )->sum('quantity');
 
-        // Cash session (only for specific branch)
-        $session = null;
+        // Cash session
         if ($branchId !== null) {
             $session = CashSession::where('branch_id', $branchId)
                 ->whereDate('opened_at', $date)
                 ->latest('opened_at')
                 ->first();
-        }
 
-        $openingCash  = $session ? (float) $session->opening_cash : 0.00;
-        $expectedCash = $session ? (float) $session->expected_cash : 0.00;
-        $countedCash  = $session?->counted_cash;
-        $overShort    = $session ? (float) $session->over_short : 0.00;
+            $openingCash  = $session ? (float) $session->opening_cash : 0.00;
+            $expectedCash = $session ? (float) $session->expected_cash : 0.00;
+            $countedCash  = $session?->counted_cash;
+            $overShort    = $session ? (float) $session->over_short : 0.00;
+        } else {
+            $sessions     = CashSession::whereDate('opened_at', $date)->get();
+            $openingCash  = (float) $sessions->sum('opening_cash');
+            $expectedCash = (float) $sessions->sum('expected_cash');
+            $hasCounted   = $sessions->whereNotNull('counted_cash')->isNotEmpty();
+            $countedCash  = $hasCounted ? (float) $sessions->sum('counted_cash') : null;
+            $overShort    = (float) $sessions->sum('over_short');
+        }
 
         // Expenses
         $expenseQuery = Expense::whereDate('expense_date', $date)
@@ -156,39 +164,53 @@ class DailySummary extends Model
 
         $netIncome = round($grossSales - $totalRefunds - $totalExpenses, 2);
 
-        // Low stock (only for specific branch)
-        $lowStockCount = 0;
+        // Low stock
         if ($branchId !== null) {
             $lowStockCount = ProductStock::where('branch_id', $branchId)
                 ->where('stock', '>', 0)
                 ->where('stock', '<=', 5)
                 ->count();
+        } else {
+            $lowStockCount = ProductStock::where('stock', '>', 0)
+                ->where('stock', '<=', 5)
+                ->count();
         }
 
-        // Final upsert - explicitly allow null branch_id
+        $attributes = [
+            'summary_date'         => $date,
+            'branch_id'            => $branchId,
+            'total_transactions'   => $totalTransactions,
+            'gross_sales'          => $grossSales,
+            'total_refunds'        => $totalRefunds,
+            'cash_sales'           => $cashSales,
+            'gcash_sales'          => $gcashSales,
+            'card_sales'           => $cardSales,
+            'other_sales'          => $otherSales,
+            'opening_cash'         => $openingCash,
+            'expected_cash'        => $expectedCash,
+            'counted_cash'         => $countedCash,
+            'over_short'           => $overShort,
+            'total_expenses'       => $totalExpenses,
+            'expenses_by_category' => $expensesByCategory,
+            'net_income'           => $netIncome,
+            'items_sold'           => $itemsSold,
+            'low_stock_count'      => $lowStockCount,
+        ];
+
+        // For "All Branches" ($branchId === null), return an unpersisted model instance
+        // to avoid violating the NOT NULL constraint on branch_id in daily_summaries table.
+        if ($branchId === null) {
+            $summary = new static($attributes);
+            $summary->is_finalized = false;
+            return $summary;
+        }
+
         return static::updateOrCreate(
             [
                 'summary_date' => $date,
-                'branch_id'    => $branchId,   // null is now allowed
+                'branch_id'    => $branchId,
             ],
-            [
-                'total_transactions'   => $totalTransactions,
-                'gross_sales'          => $grossSales,
-                'total_refunds'        => $totalRefunds,
-                'cash_sales'           => $cashSales,
-                'gcash_sales'          => $gcashSales,
-                'card_sales'           => $cardSales,
-                'other_sales'          => $otherSales,
-                'opening_cash'         => $openingCash,
-                'expected_cash'        => $expectedCash,
-                'counted_cash'         => $countedCash,
-                'over_short'           => $overShort,
-                'total_expenses'       => $totalExpenses,
-                'expenses_by_category' => $expensesByCategory,
-                'net_income'           => $netIncome,
-                'items_sold'           => $itemsSold,
-                'low_stock_count'      => $lowStockCount,
-            ]
+            $attributes
         );
     }
     
