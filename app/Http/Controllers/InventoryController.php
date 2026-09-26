@@ -75,7 +75,7 @@ class InventoryController extends Controller
             'batch_number'   => $s->batch_number,
         ])->values();
 
-        // ── Warehouse stocks (premium) ────────────────────────────────────────
+        // ── Warehouse stocks (advance) ────────────────────────────────────────
         $warehouseStockQuery = WarehouseStock::query()
             ->with(['product:id,name,barcode,product_img,product_type', 'warehouse:id,name,code'])
             ->when($search, fn ($q) => $q->whereHas('product', fn ($p) =>

@@ -7,7 +7,7 @@ import {
     Settings, Globe, ShoppingCart, Receipt, Package,
     Banknote, Bell, Layers, ChevronDown,
     CheckCircle2, XCircle, AlertTriangle, Save,
-    RotateCcw, Shield, Sparkles, Zap, Crown, Palette,
+    RotateCcw, Shield, Sparkles, Zap, Palette,
     Upload, ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,12 +56,12 @@ const PRESETS: Record<string, {
         label: "Standard",
         icon: Zap,
         color: "text-blue-500 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20",
-        description: "POS, Sales History, Products, Inventory, Stock Count, Cash Management, Basic Reports, Users, System Settings",
+        description: "POS, Sales History, Products, Categories, Cash Management, Basic Reports, Users, System Settings",
         // 1=Dashboard, 2=POS, 3=Sales History, 6=Products, 7=Categories,
         // 14=Cash Sessions, 15=Cash Counts, 16=Petty Cash, 17=Expenses,
         // 18=Daily Summary, 19=Sales Report, 20=Inventory Report,
         // 22=Activity Logs, 23=Users, 27=Expense Categories, 28=System Settings
-        // 33=Inventory, 36=Stock Count
+        // 33=Inventory, 36=Stock Count, 38=Services, 39=Customers
         ids: ["1","2","3","6","7","14","15","16","17","18","19","20","22","23","27","28","33","36","38","39"],
         aiChat: false,
     },
@@ -69,24 +69,17 @@ const PRESETS: Record<string, {
         label: "Advance",
         icon: Sparkles,
         color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20",
-        description: "Standard + Purchase Orders, Stock Transfers, Losses/Damages, All Reports, Suppliers, Promos, AI Assistant",
-        // Standard + 8=Variants, 9=Bundles, 10=Recipes, 11=Stock Mgmt,
+        description: "All features — Standard + Shop Orders, Warehouses, Variants, Bundles, Recipes, Purchase Orders, Stock Transfers, Losses/Damages, All Reports, Suppliers, Promos, Brochure Builder, AI Assistant",
+        // All active system modules:
+        // Standard + 5=Shop Orders, 8=Variants, 9=Bundles, 10=Recipes, 11=Stock Mgmt,
         // 12=Purchase Orders, 13=GRN, 21=Expense Report, 24=Suppliers,
-        // 25=Branches, 29=Promos, 30=Ingredient Usage, 31=Losses/Damages, 32=Installments
-        // 33=Inventory, 34=Stock Transfers, 36=Stock Count
-        ids: ["1","2","3","6","7","8","9","10","11","12","13","14","15","16","17",
-              "18","19","20","21","22","23","24","25","27","28","29","30","31","32","33","34","36","38","39"],
-        aiChat: true,
-    },
-    Premium: {
-        label: "Premium",
-        icon: Crown,
-        color: "text-amber-500 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20",
-        description: "All features — Advance + Shop Orders, Table Orders, Warehouses, Dining Tables",
-        // Advance + 4=Table Orders, 5=Shop Orders, 26=Dining Tables
-        // 33=Inventory, 34=Stock Transfers, 35=Warehouses, 36=Stock Count
-        ids: ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17",
-              "18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39"],
+        // 25=Branches, 29=Promos, 30=Ingredient Usage, 31=Losses/Damages,
+        // 34=Stock Transfers, 35=Warehouses, 37=Brochure Builder
+        ids: [
+            "1", "2", "3", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
+            "18", "19", "20", "21", "22", "23", "24", "25", "27", "28", "29", "30", "31", "33", "34",
+            "35", "36", "37", "38", "39"
+        ],
         aiChat: true,
     },
 };

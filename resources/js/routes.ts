@@ -234,7 +234,7 @@ export const routes = {
         cancel:   (id: Id) => route('stock-transfers.cancel',   { stockTransfer: id }),
     },
 
-    // ── Warehouses — ID 35 (Premium) ──────────────────────────────────────────
+    // ── Warehouses — ID 35 (Advance) ──────────────────────────────────────────
     warehouses: {
         index:       ()       => route('warehouses.index'),
         store:       ()       => route('warehouses.store'),
