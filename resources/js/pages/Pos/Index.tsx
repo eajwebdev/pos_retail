@@ -1501,19 +1501,33 @@ export default function PosIndex() {
         return () => window.removeEventListener("keydown", handleGlobalScan);
     }, [products, handleProductClick, refocus]);
 
-    // Hotkey bindings: F1/F2 (Scan), F3 (Credit), F4 (Toggle Mode), F8 (Void), F9 (Tender), Esc (Close)
+    // ── POS System Hotkeys ──────────────────────────────────────────────────────
+    // Overrides PC & browser shortcuts (e.g. F1 Help, F3 Find, F4/F6 URL bar, F7 Caret, F10 Menu)
+    // to strictly prioritize the POS system's custom cashier actions.
     useEffect(() => {
-        const fn = (e: KeyboardEvent) => {
-            // Function keys intercept: prevent browser default actions in CAPTURE phase!
-            if (["F1", "F2", "F3", "F4", "F8", "F9"].includes(e.key)) {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const key = (e.key || "").toUpperCase();
+            const code = (e.code || "").toUpperCase();
+            const isKey = (name: string) => key === name || code === name;
+
+            // Intercept all function keys (F1-F12) to prevent browser/PC default actions
+            if (/^F([1-9]|1[0-2])$/.test(key) || /^F([1-9]|1[0-2])$/.test(code)) {
                 e.preventDefault();
                 e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === "function") {
+                    e.stopImmediatePropagation();
+                }
             }
 
-            if (e.key === "F1" || e.key === "F2") {
+            // F1 / F2: Focus and select Barcode & Product Search input
+            if (isKey("F1") || isKey("F2")) {
                 searchRef.current?.focus();
                 searchRef.current?.select();
-            } else if (e.key === "F3") {
+                return;
+            }
+
+            // F3: Customer Credit / Utang
+            if (isKey("F3")) {
                 if (cart.length > 0) {
                     setError(null);
                     setPaymentMethodPreset("credit");
@@ -1521,31 +1535,101 @@ export default function PosIndex() {
                 } else {
                     searchRef.current?.focus();
                 }
-            } else if (e.key === "F4") {
-                setFastMode(v => !v);
-            } else if (e.key === "F8") {
+                return;
+            }
+
+            // F4: Toggle Fast Cashiering Mode vs Visual Catalog
+            if (isKey("F4")) {
+                if (!showPayment && !calcItem) {
+                    setFastMode(v => !v);
+                }
+                return;
+            }
+
+            // F5: Prevent accidental reload during cashier transaction
+            if (isKey("F5")) {
                 if (cart.length > 0) {
+                    return; // Protect active transaction
+                } else {
+                    window.location.reload();
+                    return;
+                }
+            }
+
+            // F8: Void / Clear Transaction (opens confirmation modal)
+            if (isKey("F8")) {
+                if (cart.length > 0 && !showPayment) {
                     clearCart();
                 }
-            } else if (e.key === "F9") {
-                if (cart.length > 0) {
+                return;
+            }
+
+            // F9: Charge / Cash Tender
+            if (isKey("F9")) {
+                if (cart.length > 0 && !showPayment) {
                     setError(null);
                     setPaymentMethodPreset("cash");
                     setShowPayment(true);
                 }
-            } else if (e.key === "Escape") {
+                return;
+            }
+
+            // Escape: Dismiss active modal or clear search
+            if (isKey("ESCAPE") || isKey("ESC")) {
+                e.preventDefault();
+                e.stopPropagation();
                 setShowPayment(false);
                 setShowVoidConfirm(false);
                 setVariantFor(null);
                 setCalcItem(null);
                 setSearch("");
                 refocus();
+                return;
             }
         };
 
-        window.addEventListener("keydown", fn, { capture: true });
-        return () => window.removeEventListener("keydown", fn, { capture: true });
-    }, [cart, clearCart, refocus]);
+        const handleKeyUp = (e: KeyboardEvent) => {
+            const key = (e.key || "").toUpperCase();
+            const code = (e.code || "").toUpperCase();
+            if (/^F([1-9]|1[0-2])$/.test(key) || /^F([1-9]|1[0-2])$/.test(code)) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === "function") {
+                    e.stopImmediatePropagation();
+                }
+            }
+        };
+
+        const handleHelp = (e: Event) => {
+            e.preventDefault();
+            return false;
+        };
+
+        window.addEventListener("keydown", handleKeyDown, { capture: true, passive: false });
+        window.addEventListener("keyup", handleKeyUp, { capture: true, passive: false });
+        window.addEventListener("help", handleHelp, { capture: true, passive: false });
+        (window as any).onhelp = handleHelp;
+
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown, { capture: true });
+            window.removeEventListener("keyup", handleKeyUp, { capture: true });
+            window.removeEventListener("help", handleHelp, { capture: true });
+            (window as any).onhelp = null;
+        };
+    }, [cart, clearCart, showPayment, calcItem, refocus]);
+
+    // Protect active cashier transaction from accidental tab close or page navigation
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (cart.length > 0) {
+                e.preventDefault();
+                e.returnValue = "";
+                return "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [cart.length]);
 
     // Combined search input
     const searchInput = (
@@ -1629,7 +1713,7 @@ export default function PosIndex() {
 
     // ── Standard & SimSoft Fast Cashier POS Layout ─────────────────────────────
     return (
-        <AdminLayout defaultSidebarOpen={false}>
+        <AdminLayout defaultSidebarOpen={false} title="POS / Cashier">
             <div className="relative flex flex-col overflow-hidden h-[calc(100vh-4rem)] min-w-[850px] w-full">
                 {/* ── Top Bar ─────────────────────────────────────────────── */}
                 <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-border bg-card whitespace-nowrap overflow-x-auto">
@@ -1773,7 +1857,7 @@ export default function PosIndex() {
                     )}
                 </div>
 
-                {/* ── SimSoft Cashier Hotkeys Strip ────────────────────────── */}
+                {/* ── SimSoft Cashier Action Strip ────────────────────────── */}
                 <div className="shrink-0 bg-muted/70 border-t border-border px-4 py-1.5 flex items-center justify-between text-[11px] font-mono text-muted-foreground select-none overflow-x-auto whitespace-nowrap">
                     <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                         <button
@@ -1857,7 +1941,7 @@ export default function PosIndex() {
                             <span>Close</span>
                         </button>
                     </div>
-                    <div className="text-[10px] text-muted-foreground/80 block shrink-0 ml-4">
+                    <div className="text-[10px] text-muted-foreground/80 block shrink-0 ml-4 font-mono">
                         SimSoft Retail POS · Multiplier: <code className="text-primary font-bold">1.4*BARCODE</code> or Amount: <code className="text-amber-600 font-bold">50p*BARCODE</code> · <kbd className="bg-background px-1 py-0.5 rounded border border-border">Ctrl+B</kbd> Toggle Sidebar
                     </div>
                 </div>

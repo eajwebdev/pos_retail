@@ -1,7 +1,7 @@
 "use client";
 
 import { Head, Link, usePage } from "@inertiajs/react";
-import AdminLayout from "@/Layouts/AdminLayout";
+import AdminLayout from "@/layouts/AdminLayout";
 import { cn } from "@/lib/utils";
 import {
     Calculator, CheckCircle2, AlertTriangle, Banknote,

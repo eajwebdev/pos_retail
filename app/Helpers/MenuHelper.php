@@ -72,6 +72,9 @@ class MenuHelper
     public static function grouped(): array
     {
         return [
+            'Main' => [
+                '1'  => 'Dashboard',
+            ],
             'Sales' => [
                 '2'  => 'POS / Cashier',
                 '3'  => 'Sales History',

@@ -122,12 +122,12 @@ class SystemSetting extends Model
 
     /**
      * Check if a module/menu is enabled system-wide.
-     * Menu 28 (System Settings) is always enabled.
+     * Menu 1 (Dashboard) and Menu 28 (System Settings) are always enabled.
      */
     public static function isModuleEnabled(string|int $menuId): bool
     {
         $id = (string) $menuId;
-        if ($id === '28') return true;
+        if ($id === '28' || $id === '1') return true;
 
         $key = "modules.menu_{$id}";
         $all = static::allForBranch(null);
@@ -154,7 +154,7 @@ class SystemSetting extends Model
 
         foreach ($allMenus as $id => $label) {
             $idStr = (string) $id;
-            if ($idStr === '28') {
+            if ($idStr === '28' || $idStr === '1') {
                 $enabled[] = $idStr;
                 continue;
             }

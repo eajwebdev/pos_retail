@@ -166,8 +166,8 @@ class User extends Authenticatable
     {
         $menuIdStr = (string) $menuId;
 
-        // System Settings (28) is always accessible to super admins and administrators
-        if ($menuIdStr === '28' && ($this->isSuperAdmin() || $this->isAdministrator())) {
+        // Dashboard (1) and System Settings (28) are always accessible to super admins and administrators
+        if (in_array($menuIdStr, ['1', '28'], true) && ($this->isSuperAdmin() || $this->isAdministrator())) {
             return true;
         }
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
-import AdminLayout from "@/Layouts/AdminLayout";
+import AdminLayout from "@/layouts/AdminLayout";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

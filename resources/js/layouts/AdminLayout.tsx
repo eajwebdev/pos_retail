@@ -91,6 +91,7 @@ interface AdminLayoutProps {
     children: ReactNode;
     defaultSidebarOpen?: boolean;
     sidebarCollapsible?: "offcanvas" | "icon" | "none";
+    title?: string;
 }
 
 // ─── Menu ID constants (must match MenuHelper.php) ───────────────────────────
@@ -243,6 +244,7 @@ export default function AdminLayout({
     children,
     defaultSidebarOpen,
     sidebarCollapsible = "icon",
+    title,
 }: AdminLayoutProps) {
     const { props } = usePage<any>();
     const { theme, setTheme } = useTheme();
@@ -271,10 +273,16 @@ export default function AdminLayout({
 
     const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
-    const userAccess: string[] = props.auth?.user?.access ?? [];
-    const has = (id: string) => userAccess.includes(id);
-
     const role: string = props.auth?.user?.role ?? "";
+    const isSuperOrAdmin = role === "super_admin" || role === "administrator" || Boolean(props.auth?.user?.is_super_admin) || Boolean(props.auth?.user?.is_administrator);
+
+    const userAccess: string[] = props.auth?.user?.access ?? [];
+    const has = (id: string) => {
+        if (isSuperOrAdmin && (id === MENU.DASHBOARD || id === MENU.SYSTEM_SETTINGS)) {
+            return true;
+        }
+        return userAccess.includes(id);
+    };
     const roleLabel = () => {
         if (role === "super_admin")   return "Super Admin";
         if (role === "administrator") return "Administrator";
@@ -557,7 +565,7 @@ export default function AdminLayout({
                     <header className="sticky top-0 z-40 h-16 bg-background border-b border-border flex items-center justify-between px-6 shadow-sm">
                         <div className="flex items-center gap-3">
                             <SidebarTrigger />
-                            <h1 className="text-base font-semibold">{props.title ?? "Dashboard"}</h1>
+                            <h1 className="text-base font-semibold">{title ?? (isPosPage ? "POS / Cashier" : (props.title ?? "Dashboard"))}</h1>
                         </div>
 
                         <div className="flex items-center gap-2">

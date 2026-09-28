@@ -85,11 +85,17 @@ const branchMeta: Record<string, { label: string; color: string }> = {
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 function fmtMoney(n: number, compact = false): string {
+    const isNeg = n < 0;
+    const abs = Math.abs(n);
     if (compact) {
-        if (n >= 1_000_000) return `PHP ${(n / 1_000_000).toFixed(1)}M`;
-        if (n >= 1_000)     return `PHP ${(n / 1_000).toFixed(1)}k`;
+        if (abs >= 1_000_000) return `${isNeg ? "-" : ""}PHP ${(abs / 1_000_000).toFixed(1)}M`;
+        if (abs >= 10_000)    return `${isNeg ? "-" : ""}PHP ${(abs / 1_000).toFixed(0)}k`;
+        if (abs >= 1_000)     return `${isNeg ? "-" : ""}PHP ${(abs / 1_000).toFixed(1)}k`;
+        if (abs === 0)        return "PHP 0";
+        if (Number.isInteger(abs)) return `${isNeg ? "-" : ""}PHP ${abs.toLocaleString("en-PH")}`;
+        return `${isNeg ? "-" : ""}PHP ${abs.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
-    return `PHP ${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${isNeg ? "-" : ""}PHP ${abs.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function fmtNum(n: number): string { return n.toLocaleString("en-PH"); }
 function fmtActivity(iso: string): string {
@@ -142,28 +148,53 @@ interface StatCardItem {
     footerVal: string;
     percent?: number;
     href?: string;
+    rawNumeric?: number;
 }
 
 function StatCard({ card, loading }: { card: StatCardItem; loading?: boolean }) {
+    const isPhp = typeof card.value === "string" && (card.value.startsWith("PHP ") || card.value.startsWith("-PHP "));
+    const isNegative = typeof card.value === "string" && card.value.startsWith("-PHP ");
+    const displayVal = isPhp
+        ? (isNegative ? "-" + card.value.slice(5) : card.value.slice(4))
+        : card.value;
+    const fullTooltip = card.rawNumeric !== undefined ? fmtMoney(card.rawNumeric) : card.value;
+
     const inner = (
-        <div className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-3.5 sm:p-4 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md h-full">
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-3 sm:p-3.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md h-full">
             <div>
-                <div className="flex items-center justify-between gap-1.5">
-                    <span className="truncate text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{card.label}</span>
-                    <div className={cn("flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg sm:rounded-xl", card.iconClass)}>
-                        <card.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <div className="flex items-start justify-between gap-1.5 min-h-[30px]">
+                    <span
+                        className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wide text-muted-foreground leading-tight line-clamp-2"
+                        title={card.label}
+                    >
+                        {card.label}
+                    </span>
+                    <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", card.iconClass)}>
+                        <card.icon className="h-3.5 w-3.5" />
                     </div>
                 </div>
-                <div className="mt-2.5 sm:mt-3 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                        <p className="truncate text-xl sm:text-2xl font-extrabold tracking-tight text-foreground leading-none tabular-nums">
-                            {loading ? "—" : card.value}
-                        </p>
-                        <p className={cn("mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider", card.subClass)}>
+
+                <div className="mt-2 flex items-center justify-between gap-1.5">
+                    <div className="min-w-0 flex-1">
+                        <div
+                            className="flex items-baseline gap-1 leading-none tracking-tight tabular-nums"
+                            title={fullTooltip}
+                        >
+                            {isPhp && (
+                                <span className="text-[11px] font-semibold text-muted-foreground shrink-0 select-none">
+                                    PHP
+                                </span>
+                            )}
+                            <span className="text-base sm:text-lg lg:text-xl font-extrabold text-foreground truncate">
+                                {loading ? "—" : displayVal}
+                            </span>
+                        </div>
+                        <p className={cn("mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider truncate", card.subClass)}>
                             {card.subtitle}
                         </p>
                     </div>
-                    <div className="flex h-7 w-14 sm:h-8 sm:w-16 shrink-0 items-center justify-end">
+
+                    <div className="flex h-6 w-11 sm:h-7 sm:w-13 shrink-0 items-center justify-end opacity-90 group-hover:opacity-100 transition-opacity">
                         <svg className="h-full w-full" viewBox="0 0 72 28" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d={card.sparkArea} fill={card.sparkColor} fillOpacity="0.2"/>
                             <path d={card.sparkPath} stroke={card.sparkColor} strokeWidth="2" strokeLinecap="round"/>
@@ -172,10 +203,11 @@ function StatCard({ card, loading }: { card: StatCardItem; loading?: boolean }) 
                     </div>
                 </div>
             </div>
-            <div className="mt-3.5 space-y-1.5 pt-2 border-t border-border/60">
-                <div className="flex items-center justify-between text-[10px] sm:text-[11px]">
-                    <span className="text-muted-foreground">{card.footerLabel}</span>
-                    <span className={cn("font-bold", card.subClass)}>{card.footerVal}</span>
+
+            <div className="mt-3 space-y-1.5 pt-2 border-t border-border/60">
+                <div className="flex items-center justify-between text-[10px] sm:text-[11px] gap-1">
+                    <span className="text-muted-foreground truncate">{card.footerLabel}</span>
+                    <span className={cn("font-bold shrink-0", card.subClass)}>{card.footerVal}</span>
                 </div>
                 <div className={cn("h-1.5 w-full overflow-hidden rounded-full", card.trackClass)}>
                     <div className={cn("h-full rounded-full transition-all duration-300", card.barClass)} style={{ width: `${card.percent ?? 75}%` }} />
@@ -593,6 +625,7 @@ export default function Dashboard() {
             label: "Total Sales",
             subtitle: "REVENUE",
             value: kpis ? fmtMoney(kpis.revenue, true) : "—",
+            rawNumeric: kpis?.revenue,
             icon: ShoppingCart,
             iconClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
             subClass: "text-emerald-600 dark:text-emerald-400",
@@ -613,6 +646,7 @@ export default function Dashboard() {
             label: "Physical Cash",
             subtitle: "COLLECTIONS",
             value: kpis ? fmtMoney(kpis.physical_cash ?? 0, true) : "—",
+            rawNumeric: kpis?.physical_cash,
             icon: Banknote,
             iconClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
             subClass: "text-blue-600 dark:text-blue-400",
@@ -633,6 +667,7 @@ export default function Dashboard() {
             label: "Cash Drawer",
             subtitle: "DRAWER TOTAL",
             value: kpis ? fmtMoney(kpis.expected_cash_drawer ?? 0, true) : "—",
+            rawNumeric: kpis?.expected_cash_drawer,
             icon: Wallet,
             iconClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
             subClass: "text-indigo-600 dark:text-indigo-400",
@@ -653,6 +688,7 @@ export default function Dashboard() {
             label: "GCash / E-Wallet",
             subtitle: "DIGITAL PAY",
             value: kpis ? fmtMoney(kpis.expected_gcash ?? 0, true) : "—",
+            rawNumeric: kpis?.expected_gcash,
             icon: Zap,
             iconClass: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
             subClass: "text-sky-600 dark:text-sky-400",
@@ -673,6 +709,7 @@ export default function Dashboard() {
             label: "Total Expenses",
             subtitle: "OUTFLOW",
             value: kpis ? fmtMoney(kpis.expenses, true) : "—",
+            rawNumeric: kpis?.expenses,
             icon: TrendingDown,
             iconClass: "bg-red-500/10 text-red-600 dark:text-red-400",
             subClass: "text-red-600 dark:text-red-400",
@@ -693,6 +730,7 @@ export default function Dashboard() {
             label: "Accounts Payable",
             subtitle: "DUE TO PAY",
             value: kpis ? fmtMoney(kpis.accounts_payable ?? 0, true) : "—",
+            rawNumeric: kpis?.accounts_payable,
             icon: Receipt,
             iconClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
             subClass: "text-orange-600 dark:text-orange-400",
@@ -713,6 +751,7 @@ export default function Dashboard() {
             label: "Receivables",
             subtitle: "UNPAID CREDIT",
             value: kpis ? fmtMoney(kpis.credit_outstanding ?? 0, true) : "—",
+            rawNumeric: kpis?.credit_outstanding,
             icon: Clock,
             iconClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
             subClass: "text-amber-600 dark:text-amber-400",
@@ -733,6 +772,7 @@ export default function Dashboard() {
             label: "Cash Over / Short",
             subtitle: (kpis?.over_short ?? 0) < 0 ? "SHORTAGE" : (kpis?.over_short ?? 0) > 0 ? "SURPLUS" : "BALANCED",
             value: fmtMoney(Math.abs(kpis?.over_short ?? 0), true),
+            rawNumeric: kpis?.over_short,
             icon: Scale,
             iconClass: (kpis?.over_short ?? 0) < 0 ? "bg-red-500/10 text-red-600 dark:text-red-400" : (kpis?.over_short ?? 0) > 0 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
             subClass: (kpis?.over_short ?? 0) < 0 ? "text-red-600 dark:text-red-400" : (kpis?.over_short ?? 0) > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
@@ -753,6 +793,7 @@ export default function Dashboard() {
             label: "Total Transactions",
             subtitle: "COMPLETED",
             value: fmtNum(kpis?.transactions ?? 0),
+            rawNumeric: kpis?.transactions,
             icon: ShoppingCart,
             iconClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
             subClass: "text-purple-600 dark:text-purple-400",
@@ -773,6 +814,7 @@ export default function Dashboard() {
             label: "Voided Sales",
             subtitle: fmtMoney(kpis?.void_total ?? 0, true),
             value: `${fmtNum(kpis?.void_count ?? 0)} txns`,
+            rawNumeric: kpis?.void_total,
             icon: ClipboardList,
             iconClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
             subClass: "text-rose-600 dark:text-rose-400",
@@ -793,6 +835,7 @@ export default function Dashboard() {
             label: "Pending Orders",
             subtitle: "INBOUND PO",
             value: fmtNum(kpis?.pending_orders_count ?? 0),
+            rawNumeric: kpis?.pending_orders_count,
             icon: Package,
             iconClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
             subClass: "text-blue-600 dark:text-blue-400",
@@ -813,6 +856,7 @@ export default function Dashboard() {
             label: "Stock Loss Value",
             subtitle: "INVENTORY LOSS",
             value: kpis ? fmtMoney(kpis.stock_loss_value, true) : "—",
+            rawNumeric: kpis?.stock_loss_value,
             icon: PackageX,
             iconClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
             subClass: "text-amber-600 dark:text-amber-400",
@@ -833,6 +877,7 @@ export default function Dashboard() {
             label: "Credit Collected",
             subtitle: "PAYMENTS IN",
             value: kpis ? fmtMoney(kpis.credit_collected ?? 0, true) : "—",
+            rawNumeric: kpis?.credit_collected,
             icon: CheckCircle2,
             iconClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
             subClass: "text-emerald-600 dark:text-emerald-400",
@@ -853,6 +898,7 @@ export default function Dashboard() {
             label: "Avg Daily Revenue",
             subtitle: "DAILY PACE",
             value: kpis ? fmtMoney(kpis.avg_daily, true) : "—",
+            rawNumeric: kpis?.avg_daily,
             icon: Activity,
             iconClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
             subClass: "text-indigo-600 dark:text-indigo-400",
@@ -872,7 +918,7 @@ export default function Dashboard() {
 
     return (
         <AdminLayout>
-            <div className="space-y-5 pb-10 max-w-[1400px] mx-auto">
+            <div className="space-y-5 pb-10 w-full">
 
                 {/* ── Page header ───────────────────────────────────────── */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -945,10 +991,10 @@ export default function Dashboard() {
                     </span>
                 </div>
 
-                {/* ── KPI cards (14 Uniform Cards: 2 rows of 7 on 2xl) ─── */}
+                {/* ── KPI cards (14 Uniform Cards) ─── */}
                 <div className="space-y-3">
                     <SectionTitle>Key Performance Indicators — {data ? Math.round(data.period.days) : "—"}d period</SectionTitle>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 sm:gap-3 lg:gap-3.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 min-[1680px]:grid-cols-7 gap-2.5 sm:gap-3 lg:gap-3.5">
                         {statCards.map((card) => (
                             <StatCard key={card.key} card={card} loading={loading} />
                         ))}
