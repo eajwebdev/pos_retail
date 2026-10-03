@@ -46,14 +46,19 @@ class PosController extends Controller
 
         $session = null;
         if ($branchId) {
-            $session = CashSession::where('branch_id', $branchId)
+            $sessionQuery = CashSession::where('branch_id', $branchId)
                 ->where('user_id', $user->id)
-                ->open()
-                ->latest()
-                ->first();
+                ->open();
 
-            // Auto-start cash session with 0 opening cash so cashier never has to leave POS to start selling
-            if (! $session) {
+            // Cashiers must explicitly open a fresh session for each business day.
+            // Managers/admins retain the existing automatic-session behaviour.
+            if ($user->isCashier()) {
+                $sessionQuery->whereDate('opened_at', today());
+            }
+
+            $session = $sessionQuery->latest('opened_at')->first();
+
+            if (! $session && ! $user->isCashier()) {
                 $session = CashSession::create([
                     'user_id'      => $user->id,
                     'branch_id'    => $branchId,
@@ -283,14 +288,25 @@ class PosController extends Controller
 
         if (! $branchId) return back()->withErrors(['error' => 'No branch assigned.']);
 
-        // Find or auto-start open session so checkout always succeeds smoothly without leaving POS
-        $openSession = CashSession::where('branch_id', $branchId)
+        $sessionQuery = CashSession::where('branch_id', $branchId)
             ->where('user_id', $user->id)
-            ->open()
-            ->latest()
-            ->first();
+            ->open();
 
-        if (! $openSession && $branchId) {
+        if ($user->isCashier()) {
+            $sessionQuery->whereDate('opened_at', today());
+        }
+
+        $openSession = $sessionQuery->latest('opened_at')->first();
+
+        // This is an authorization/business-rule check, not just a UI check. A cashier
+        // cannot bypass the POS lock by posting the checkout request directly.
+        if (! $openSession && $user->isCashier()) {
+            return back()->withErrors([
+                'cash_session' => 'Open today\'s cash session before processing a sale.',
+            ]);
+        }
+
+        if (! $openSession) {
             $openSession = CashSession::create([
                 'user_id'      => $user->id,
                 'branch_id'    => $branchId,
@@ -322,7 +338,7 @@ class PosController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($validated, $user, $branchId) {
+            $result = DB::transaction(function () use ($validated, $user, $branchId, $openSession) {
                 $allowNeg = SystemSetting::allowNegativeStock($branchId);
                 $subtotal         = 0;
                 $taxableSubtotal  = 0;
@@ -442,7 +458,7 @@ class PosController extends Controller
                     'receipt_number'  => $this->generateReceiptNumber($branchId),
                     'user_id'         => $user->id,
                     'branch_id'       => $branchId,
-                    'cash_session_id' => $openSession?->id ?? $validated['cash_session_id'] ?? null,
+                    'cash_session_id' => $openSession?->id,
                     'table_order_id'  => null,
                     'customer_id'     => $customer?->id,
                     'payment_method'  => $method,

@@ -79,6 +79,115 @@ const SalonLayout      = lazy(() => import("./layouts/SalonLayout"));
 const KioskLayout      = lazy(() => import("./layouts/KioskLayout"));
 const MobileLayout     = lazy(() => import("./layouts/MobileLayout"));
 
+function CashSessionGate({ currency, branchName }: { currency: string; branchName: string }) {
+    const [openingCash, setOpeningCash] = useState("0.00");
+    const [notes, setNotes] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    const todayLabel = new Intl.DateTimeFormat("en-PH", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    }).format(new Date());
+
+    const submit = (event: React.FormEvent) => {
+        event.preventDefault();
+        const amount = Number(openingCash);
+
+        if (!Number.isFinite(amount) || amount < 0) {
+            setError("Enter a valid opening cash amount.");
+            return;
+        }
+
+        setLoading(true);
+        setError("");
+        router.post(routes.pos.openSession(), {
+            opening_cash: amount,
+            notes: notes.trim() || null,
+        }, {
+            preserveScroll: true,
+            onError: errors => {
+                setError(String(Object.values(errors)[0] ?? "Unable to open the cash session."));
+                setLoading(false);
+            },
+            onFinish: () => setLoading(false),
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+                <div className="border-b border-border bg-primary/5 px-6 py-6 text-center">
+                    <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+                        <Wallet className="h-6 w-6" />
+                    </span>
+                    <h1 className="text-xl font-black text-foreground">Open today's cash session</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Start your register before using the POS. You can do it here without going to Cash Sessions.
+                    </p>
+                </div>
+
+                <form onSubmit={submit} className="space-y-5 p-6">
+                    <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                        <p className="font-bold text-foreground">{branchName}</p>
+                        <p className="mt-0.5">{todayLabel}</p>
+                    </div>
+
+                    <div>
+                        <label htmlFor="pos-opening-cash" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Opening cash
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-muted-foreground">{currency}</span>
+                            <input
+                                id="pos-opening-cash"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                required
+                                autoFocus
+                                value={openingCash}
+                                onChange={event => setOpeningCash(event.target.value)}
+                                className="h-14 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-right text-2xl font-black tabular-nums text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            />
+                        </div>
+                        <p className="mt-1.5 text-xs text-muted-foreground">Enter the physical cash currently in the drawer. Use 0 if the drawer starts empty.</p>
+                    </div>
+
+                    <div>
+                        <label htmlFor="pos-session-notes" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Notes <span className="font-normal normal-case">(optional)</span>
+                        </label>
+                        <textarea
+                            id="pos-session-notes"
+                            rows={2}
+                            maxLength={500}
+                            value={notes}
+                            onChange={event => setNotes(event.target.value)}
+                            placeholder="e.g. Morning shift"
+                            className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
+                        />
+                    </div>
+
+                    {error && (
+                        <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{error}</span>
+                        </div>
+                    )}
+
+                    <Button type="submit" className="h-12 w-full gap-2 text-base font-black" disabled={loading}>
+                        {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                        {loading ? "Opening session..." : "Open Session & Start POS"}
+                    </Button>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 function LayoutSpinner() {
     return (
         <div className="flex items-center justify-center h-full">
@@ -1658,8 +1767,10 @@ export default function PosIndex() {
         </div>
     );
 
-    const sessionRequired = settings?.require_cash_session ?? false;
-    const noSessionOverlay = null;
+    const cashierNeedsSession = user?.is_cashier === true && !session;
+    const noSessionOverlay = cashierNeedsSession ? (
+        <CashSessionGate currency={currency} branchName={branch?.name ?? "Assigned branch"} />
+    ) : null;
 
     // ── Kiosk Layout ─────────────────────────────────────────────────────────
     if (layout === "kiosk") {
@@ -1707,6 +1818,7 @@ export default function PosIndex() {
                         loading={loading} serverError={error} initialMethod={paymentMethodPreset} />
                 )}
                 {receipt && <SaleSuccessModal receipt={receipt} currency={currency} onNewSale={() => { setReceipt(null); refocus(100); }} />}
+                {noSessionOverlay}
             </div>
         );
     }
@@ -1992,6 +2104,7 @@ export default function PosIndex() {
             )}
 
             {receipt && <SaleSuccessModal receipt={receipt} currency={currency} onNewSale={() => { setReceipt(null); refocus(100); }} />}
+            {noSessionOverlay}
         </AdminLayout>
     );
 }

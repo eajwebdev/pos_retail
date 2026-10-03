@@ -29,6 +29,7 @@ export const routes = {
     pos: {
         index:         ()       => route('pos.index'),
         store:         ()       => route('pos.store'),
+        openSession:   ()       => route('pos.session.open'),
         show:          (id: Id) => route('pos.show',          { sale: id }),
         edit:          (id: Id) => route('pos.edit',          { sale: id }),
         update:        (id: Id) => route('pos.update',        { sale: id }),
